@@ -1,0 +1,1 @@
+# calculate-crypto-tech-indicator-and-push
