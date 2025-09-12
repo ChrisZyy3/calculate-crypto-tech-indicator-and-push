@@ -1,0 +1,191 @@
+#!/usr/bin/env python3
+"""Fetch 4-hour OHLCV data from CryptoCompare and compute RSI values.
+
+The script queries CryptoCompare's ``histohour`` endpoint with ``aggregate=4``
+to obtain 4-hour candles for several cryptocurrencies and calculates both
+14-period and 6-period Relative Strength Indexes (RSI) from the closing prices.
+Set the ``CC_API_KEY`` environment variable if you have an API key; the
+endpoint can also work without a key but may be rate limited.
+"""
+
+from __future__ import annotations
+
+import logging
+import os
+import time
+import urllib.parse
+from datetime import datetime
+from typing import Any, Dict, Tuple
+
+import pandas as pd
+import requests
+
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
+logger = logging.getLogger(__name__)
+
+
+class Config:
+    """Configuration for RSI-4h calculations and notifications."""
+
+    BASE_URL = "https://min-api.cryptocompare.com/data/v2/histohour"
+    API_KEY = os.getenv("CC_API_KEY")
+    API_CALL_DELAY = 5
+
+    RSI_OVERBOUGHT_14 = 65
+    RSI_OVERSOLD_14 = 35
+    RSI_OVERBOUGHT_6 = 70
+    RSI_OVERSOLD_6 = 30
+
+    NOTIFICATION_URLS = {
+        "push_ft07": (
+            "https://sctp11310thhgz5tizmjdsetszjitcko.push.ft07.com/send/"
+            "sctp11310thhgz5tizmjdsetszjitcko.send?title={}&desp={}"
+        )
+    }
+
+
+def fetch_ohlcv(symbol: str, limit: int = 100) -> pd.Series:
+    """Fetch 4-hour OHLCV data for ``symbol`` and return close prices.
+
+    Args:
+        symbol: Cryptocurrency symbol (e.g., ``"BTC"``).
+        limit: Number of 4-hour candles to retrieve.
+
+    Returns:
+        Series of closing prices indexed by candle open time.
+    """
+    params = {
+        "fsym": symbol,
+        "tsym": "USD",
+        "limit": limit,
+        "aggregate": 4,
+    }
+    headers = {"authorization": f"Apikey {Config.API_KEY}"} if Config.API_KEY else None
+
+    logger.info("Requesting %s with params %s", Config.BASE_URL, params)
+    response = requests.get(Config.BASE_URL, headers=headers, params=params, timeout=30)
+    logger.info("Response status code: %s", response.status_code)
+    response.raise_for_status()
+    data = response.json()["Data"]["Data"]
+    logger.info("Received %d data points", len(data))
+    if data:
+        logger.info("First record: %s", data[0])
+
+    df = pd.DataFrame(data)
+    df["time"] = pd.to_datetime(df["time"], unit="s")
+    df.set_index("time", inplace=True)
+    return df["close"]
+
+
+def calculate_rsi(prices: pd.Series, period: int = 14) -> pd.Series:
+    """Calculate RSI using exponential moving averages."""
+    delta = prices.diff()
+    gain = delta.clip(lower=0)
+    loss = -delta.clip(upper=0)
+    avg_gain = gain.ewm(alpha=1 / period, adjust=False).mean()
+    avg_loss = loss.ewm(alpha=1 / period, adjust=False).mean()
+    rs = avg_gain / avg_loss
+    rsi = 100 - (100 / (1 + rs))
+    return rsi
+
+
+def analyze_extreme_rsi(results: Dict[str, Dict[str, Any]]) -> Dict[str, str]:
+    """Find overbought and oversold RSI readings."""
+    extreme: Dict[str, str] = {}
+    for symbol, data in results.items():
+        if data.get("error"):
+            continue
+
+        r14 = data.get("rsi_14")
+        if isinstance(r14, float):
+            if r14 >= Config.RSI_OVERBOUGHT_14:
+                extreme[f"{symbol} (RSI-14)"] = f"超买: {r14:.2f}"
+            elif r14 <= Config.RSI_OVERSOLD_14:
+                extreme[f"{symbol} (RSI-14)"] = f"超卖: {r14:.2f}"
+
+        r6 = data.get("rsi_6")
+        if isinstance(r6, float):
+            if r6 >= Config.RSI_OVERBOUGHT_6:
+                extreme[f"{symbol} (RSI-6)"] = f"超买: {r6:.2f}"
+            elif r6 <= Config.RSI_OVERSOLD_6:
+                extreme[f"{symbol} (RSI-6)"] = f"超卖: {r6:.2f}"
+
+    return extreme
+
+
+def format_rsi_message(extreme_rsi: Dict[str, str]) -> Tuple[str, str]:
+    """Format extreme RSI readings into a Markdown message."""
+    if not extreme_rsi:
+        return "", ""
+
+    overbought = {k: v for k, v in extreme_rsi.items() if "超买" in v}
+    oversold = {k: v for k, v in extreme_rsi.items() if "超卖" in v}
+
+    title = f"RSI-{len(overbought)}个超买,{len(oversold)}个超卖信号"
+    lines = ["## RSI 4h 极值提醒", ""]
+
+    if overbought:
+        lines.append("### 🔴 超买 (卖出信号)")
+        for k, v in overbought.items():
+            lines.append(f"- {k}: {v}")
+        lines.append("")
+
+    if oversold:
+        lines.append("### 🟢 超卖 (买入信号)")
+        for k, v in oversold.items():
+            lines.append(f"- {k}: {v}")
+        lines.append("")
+
+    lines.append(f"检测时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    content = "\n".join(lines)
+    return title, content
+
+
+def send_notification(title: str, content: str) -> None:
+    """Send the formatted message to all configured endpoints."""
+    encoded_title = urllib.parse.quote_plus(title)
+    encoded_content = urllib.parse.quote_plus(content)
+
+    for name, url_tpl in Config.NOTIFICATION_URLS.items():
+        url = url_tpl.format(encoded_title, encoded_content)
+        try:
+            resp = requests.get(url, timeout=30)
+            if resp.status_code == 200:
+                logger.info("%s 推送成功", name)
+            else:
+                logger.warning("%s 推送失败: %s", name, resp.status_code)
+        except Exception as exc:
+            logger.error("Notification error via %s: %s", name, exc)
+
+
+SYMBOLS = ["BTC", "ETH", "BNB", "SOL"]
+
+
+def main() -> None:
+    results: Dict[str, Dict[str, Any]] = {}
+    total = len(SYMBOLS)
+
+    for idx, symbol in enumerate(SYMBOLS, 1):
+        try:
+            closes = fetch_ohlcv(symbol)
+        except requests.RequestException as exc:
+            logger.error("Failed to fetch %s data: %s", symbol, exc)
+            results[symbol] = {"rsi_14": None, "rsi_6": None, "error": True}
+        else:
+            rsi14 = calculate_rsi(closes, period=14).iloc[-1]
+            rsi6 = calculate_rsi(closes, period=6).iloc[-1]
+            results[symbol] = {"rsi_14": rsi14, "rsi_6": rsi6, "error": False}
+            print(f"{symbol}: RSI-14={rsi14:.2f}, RSI-6={rsi6:.2f}")
+
+        if idx < total:
+            time.sleep(Config.API_CALL_DELAY)
+
+    extreme = analyze_extreme_rsi(results)
+    if extreme:
+        title, content = format_rsi_message(extreme)
+        send_notification(title, content)
+
+
+if __name__ == "__main__":
+    main()
+
