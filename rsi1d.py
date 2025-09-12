@@ -1,3 +1,10 @@
+"""RSI 日线脚本
+
+Global thresholds and notification URLs are defined in
+``config.shared``. The settings below are specific to the daily
+interval such as API endpoints, delays and crypto mappings.
+"""
+
 import requests
 import pandas as pd
 import time
@@ -6,37 +13,35 @@ from typing import Dict, List, Tuple, Optional, Any
 import logging
 from datetime import datetime
 
+from config import shared
+
 # 配置日志
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
-# 配置常量
 class Config:
-    # API配置
+    # API配置（日线特有）
     COINGECKO_BASE_URL = "https://api.coingecko.com/api/v3"
     REQUEST_TIMEOUT = 30
     RETRY_ATTEMPTS = 3
-    
+
     # RSI配置
     DEFAULT_RSI_PERIODS = [14, 6]
     DEFAULT_DAYS = 30
-    
-    # 阈值配置
-    RSI_OVERBOUGHT_14 = 65
-    RSI_OVERSOLD_14 = 35
-    RSI_OVERBOUGHT_6 = 70
-    RSI_OVERSOLD_6 = 30
-    
-    # 通知配置
-    NOTIFICATION_URLS = {
-        # 'server_chan': "https://sctapi.ftqq.com/SCT241317TwvSKJKGGttpZcEe2j9CQgjDo.send?title={}&desp={}", # 微信接口，暂不推送
-        'push_ft07': "https://sctp11310thhgz5tizmjdsetszjitcko.push.ft07.com/send/sctp11310thhgz5tizmjdsetszjitcko.send?title={}&desp={}"
-    }
-    
-    # 延迟配置
+
+    # 阈值配置（全局）
+    RSI_OVERBOUGHT_14 = shared.RSI_OVERBOUGHT_14
+    RSI_OVERSOLD_14 = shared.RSI_OVERSOLD_14
+    RSI_OVERBOUGHT_6 = shared.RSI_OVERBOUGHT_6
+    RSI_OVERSOLD_6 = shared.RSI_OVERSOLD_6
+
+    # 通知配置（全局）
+    NOTIFICATION_URLS = shared.NOTIFICATION_URLS
+
+    # 延迟配置（日线特有）
     API_CALL_DELAY = 20  # 秒
 
-    # 加密货币配置
+    # 加密货币配置（日线特有）
     CRYPTO_IDS = {
         "BTC": "bitcoin",
         "ETH": "ethereum",

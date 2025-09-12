@@ -20,28 +20,33 @@ from typing import Any, Dict, Tuple
 import pandas as pd
 import requests
 
+from config import shared
+
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
 
 
 class Config:
-    """Configuration for RSI-4h calculations and notifications."""
+    """Configuration for RSI-4h calculations.
 
+    Global RSI thresholds and notification URLs are defined in
+    :mod:`config.shared`; the values below are specific to the 4‑hour
+    interval.
+    """
+
+    # Interval-specific API settings
     BASE_URL = "https://min-api.cryptocompare.com/data/v2/histohour"
     API_KEY = os.getenv("CC_API_KEY")
     API_CALL_DELAY = 5
 
-    RSI_OVERBOUGHT_14 = 65
-    RSI_OVERSOLD_14 = 35
-    RSI_OVERBOUGHT_6 = 70
-    RSI_OVERSOLD_6 = 30
+    # Shared RSI thresholds
+    RSI_OVERBOUGHT_14 = shared.RSI_OVERBOUGHT_14
+    RSI_OVERSOLD_14 = shared.RSI_OVERSOLD_14
+    RSI_OVERBOUGHT_6 = shared.RSI_OVERBOUGHT_6
+    RSI_OVERSOLD_6 = shared.RSI_OVERSOLD_6
 
-    NOTIFICATION_URLS = {
-        "push_ft07": (
-            "https://sctp11310thhgz5tizmjdsetszjitcko.push.ft07.com/send/"
-            "sctp11310thhgz5tizmjdsetszjitcko.send?title={}&desp={}"
-        )
-    }
+    # Shared notification endpoints
+    NOTIFICATION_URLS = shared.NOTIFICATION_URLS
 
 
 def fetch_ohlcv(symbol: str, limit: int = 100) -> pd.Series:
