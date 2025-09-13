@@ -11,10 +11,9 @@ import time
 import urllib.parse
 from typing import Any, Dict, List, Optional, Tuple
 import logging
-from datetime import datetime
 
 from config import shared
-from rsi_utils import analyze_extreme_rsi, calculate_rsi
+from rsi_utils import analyze_extreme_rsi, calculate_rsi, format_rsi_message
 
 # 配置日志
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -178,102 +177,6 @@ def calculate_crypto_rsi(crypto_ids: Dict[str, str]) -> Dict[str, Dict[str, Any]
             time.sleep(Config.API_CALL_DELAY)
     
     return results
-def format_rsi_message(extreme_rsi: Dict[str, str]) -> Tuple[str, str]:
-    """
-    格式化RSI消息为Markdown格式
-    
-    Args:
-        extreme_rsi: 极端RSI值字典
-    
-    Returns:
-        元组(title, content)
-    """
-    if not extreme_rsi:
-        return "", ""
-    
-    # 分类统计
-    overbought_items = []
-    oversold_items = []
-    
-    for indicator, status in extreme_rsi.items():
-        if "超买" in status:
-            # 提取RSI值
-            rsi_value = status.split(': ')[1]
-            overbought_items.append((indicator, rsi_value))
-        elif "超卖" in status:
-            # 提取RSI值
-            rsi_value = status.split(': ')[1]
-            oversold_items.append((indicator, rsi_value))
-    
-    # 计算并设置标题：RSI-x个超买,y个超卖信号
-    title = f"RSI-{len(overbought_items)}个超买,{len(oversold_items)}个超卖信号"
-
-    # 构建 Markdown 内容
-    content_lines = [
-        "## 📈 RSI技术指标分析",
-        "",
-        f"🕰️ **检测时间**: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
-        "",
-        "---",
-        ""
-    ]
-    
-    # 超买区域 (红色)
-    if overbought_items:
-        content_lines.extend([
-            "### 🔴 **超买区域** `卖出信号`",
-            "",
-            "| 加密货币 | RSI指标 | RSI值 |",
-            "|---------|--------|-------|"
-        ])
-        
-        for indicator, rsi_value in overbought_items:
-            # 解析指标名称
-            parts = indicator.split(' (')
-            crypto_name = parts[0]
-            rsi_type = parts[1].rstrip(')')
-            
-            content_lines.append(
-                f"| **{crypto_name}** | `{rsi_type}` | **{rsi_value}** |"
-            )
-        
-        content_lines.extend(["", "> 📉 **建议**: 考虑卖出，获利了结", ""])
-    
-    # 超卖区域 (绿色)
-    if oversold_items:
-        content_lines.extend([
-            "### 🟢 **超卖区域** `买入信号`",
-            "",
-            "| 加密货币 | RSI指标 | RSI值 |",
-            "|---------|--------|-------|"
-        ])
-        
-        for indicator, rsi_value in oversold_items:
-            # 解析指标名称
-            parts = indicator.split(' (')
-            crypto_name = parts[0]
-            rsi_type = parts[1].rstrip(')')
-            
-            content_lines.append(
-                f"| **{crypto_name}** | `{rsi_type}` | **{rsi_value}** |"
-            )
-        
-        content_lines.extend(["", "> 📈 **建议**: 考虑买入，可能将反弹", ""])
-    
-    # 添加脚注
-    content_lines.extend([
-        "---",
-        "",
-        "### 📊 RSI指标说明",
-        "",
-        "- **RSI-14**: 14日相对强弱指数 (超买: ≥ 65, 超卖: ≤ 35)",
-        "- **RSI-6**: 6日相对强弱指数 (超买: ≥ 70, 超卖: ≤ 30)",
-        "",
-        "> ⚠️ **免责声明**: 仅供参考，不构成投资建议，请理性投资。"
-    ])
-    
-    content = "\n".join(content_lines)
-    return title, content
 
 def send_notification(title: str, content: str) -> bool:
     """

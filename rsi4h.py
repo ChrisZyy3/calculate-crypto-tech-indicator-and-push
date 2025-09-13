@@ -14,14 +14,13 @@ import logging
 import os
 import time
 import urllib.parse
-from datetime import datetime
-from typing import Any, Dict, Tuple
+from typing import Any, Dict
 
 import pandas as pd
 import requests
 
 from config import shared
-from rsi_utils import analyze_extreme_rsi, calculate_rsi
+from rsi_utils import analyze_extreme_rsi, calculate_rsi, format_rsi_message
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
@@ -83,32 +82,6 @@ def fetch_ohlcv(symbol: str, limit: int = 100) -> pd.Series:
     return df["close"]
 
 
-def format_rsi_message(extreme_rsi: Dict[str, str]) -> Tuple[str, str]:
-    """Format extreme RSI readings into a Markdown message."""
-    if not extreme_rsi:
-        return "", ""
-
-    overbought = {k: v for k, v in extreme_rsi.items() if "超买" in v}
-    oversold = {k: v for k, v in extreme_rsi.items() if "超卖" in v}
-
-    title = f"RSI-{len(overbought)}个超买,{len(oversold)}个超卖信号"
-    lines = ["## RSI 4h 极值提醒", ""]
-
-    if overbought:
-        lines.append("### 🔴 超买 (卖出信号)")
-        for k, v in overbought.items():
-            lines.append(f"- {k}: {v}")
-        lines.append("")
-
-    if oversold:
-        lines.append("### 🟢 超卖 (买入信号)")
-        for k, v in oversold.items():
-            lines.append(f"- {k}: {v}")
-        lines.append("")
-
-    lines.append(f"检测时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-    content = "\n".join(lines)
-    return title, content
 
 
 def send_notification(title: str, content: str) -> None:
