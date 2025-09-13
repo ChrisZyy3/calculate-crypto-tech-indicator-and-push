@@ -72,9 +72,6 @@ def fetch_ohlcv(symbol: str, limit: int = 100) -> pd.Series:
     logger.info("Response status code: %s", response.status_code)
     response.raise_for_status()
     data = response.json()["Data"]["Data"]
-    logger.info("Received %d data points", len(data))
-    if data:
-        logger.info("First record: %s", data[0])
 
     df = pd.DataFrame(data)
     df["time"] = pd.to_datetime(df["time"], unit="s")
@@ -101,7 +98,18 @@ def send_notification(title: str, content: str) -> None:
             logger.error("Notification error via %s: %s", name, exc)
 
 
-SYMBOLS = ["BTC", "ETH", "BNB", "SOL"]
+SYMBOLS = [
+    "BTC", 
+    "ETH", 
+    "BNB", 
+    "SOL", 
+    "BGB", 
+    'PENDLE',
+    "SUI",
+    "APT",
+    
+     # "MNT", #没有这个
+    ]
 
 
 def main() -> None:
