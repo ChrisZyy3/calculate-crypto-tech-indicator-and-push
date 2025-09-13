@@ -21,6 +21,7 @@ import pandas as pd
 import requests
 
 from config import shared
+from rsi_utils import analyze_extreme_rsi, calculate_rsi
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
@@ -82,42 +83,6 @@ def fetch_ohlcv(symbol: str, limit: int = 100) -> pd.Series:
     return df["close"]
 
 
-def calculate_rsi(prices: pd.Series, period: int = 14) -> pd.Series:
-    """Calculate RSI using exponential moving averages."""
-    delta = prices.diff()
-    gain = delta.clip(lower=0)
-    loss = -delta.clip(upper=0)
-    avg_gain = gain.ewm(alpha=1 / period, adjust=False).mean()
-    avg_loss = loss.ewm(alpha=1 / period, adjust=False).mean()
-    rs = avg_gain / avg_loss
-    rsi = 100 - (100 / (1 + rs))
-    return rsi
-
-
-def analyze_extreme_rsi(results: Dict[str, Dict[str, Any]]) -> Dict[str, str]:
-    """Find overbought and oversold RSI readings."""
-    extreme: Dict[str, str] = {}
-    for symbol, data in results.items():
-        if data.get("error"):
-            continue
-
-        r14 = data.get("rsi_14")
-        if isinstance(r14, float):
-            if r14 >= Config.RSI_OVERBOUGHT_14:
-                extreme[f"{symbol} (RSI-14)"] = f"超买: {r14:.2f}"
-            elif r14 <= Config.RSI_OVERSOLD_14:
-                extreme[f"{symbol} (RSI-14)"] = f"超卖: {r14:.2f}"
-
-        r6 = data.get("rsi_6")
-        if isinstance(r6, float):
-            if r6 >= Config.RSI_OVERBOUGHT_6:
-                extreme[f"{symbol} (RSI-6)"] = f"超买: {r6:.2f}"
-            elif r6 <= Config.RSI_OVERSOLD_6:
-                extreme[f"{symbol} (RSI-6)"] = f"超卖: {r6:.2f}"
-
-    return extreme
-
-
 def format_rsi_message(extreme_rsi: Dict[str, str]) -> Tuple[str, str]:
     """Format extreme RSI readings into a Markdown message."""
     if not extreme_rsi:
@@ -177,10 +142,15 @@ def main() -> None:
             logger.error("Failed to fetch %s data: %s", symbol, exc)
             results[symbol] = {"rsi_14": None, "rsi_6": None, "error": True}
         else:
-            rsi14 = calculate_rsi(closes, period=14).iloc[-1]
-            rsi6 = calculate_rsi(closes, period=6).iloc[-1]
-            results[symbol] = {"rsi_14": rsi14, "rsi_6": rsi6, "error": False}
-            print(f"{symbol}: RSI-14={rsi14:.2f}, RSI-6={rsi6:.2f}")
+            rsi14_series = calculate_rsi(closes, period=14)
+            rsi6_series = calculate_rsi(closes, period=6)
+            if rsi14_series is None or rsi6_series is None:
+                results[symbol] = {"rsi_14": None, "rsi_6": None, "error": True}
+            else:
+                rsi14 = rsi14_series.iloc[-1]
+                rsi6 = rsi6_series.iloc[-1]
+                results[symbol] = {"rsi_14": rsi14, "rsi_6": rsi6, "error": False}
+                print(f"{symbol}: RSI-14={rsi14:.2f}, RSI-6={rsi6:.2f}")
 
         if idx < total:
             time.sleep(Config.API_CALL_DELAY)

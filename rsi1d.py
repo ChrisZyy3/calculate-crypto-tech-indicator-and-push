@@ -9,11 +9,12 @@ import requests
 import pandas as pd
 import time
 import urllib.parse
-from typing import Dict, List, Tuple, Optional, Any
+from typing import Any, Dict, List, Optional, Tuple
 import logging
 from datetime import datetime
 
 from config import shared
+from rsi_utils import analyze_extreme_rsi, calculate_rsi
 
 # 配置日志
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -108,55 +109,9 @@ def get_historical_prices(coin_id: str, days: int = Config.DEFAULT_DAYS) -> Opti
         except Exception as e:
             logger.error(f"Unexpected error fetching data for {coin_id}: {e}")
             return None
-    
+
     return None
 
-def calculate_rsi(prices: pd.Series, length: int = 14) -> Optional[float]:
-    """
-    Calculate RSI using TradingView's algorithm (ta.rsi equivalent)
-    This uses RMA (Running Moving Average) which is equivalent to EMA with alpha = 1/length
-    
-    Args:
-        prices: 价格数据Series
-        length: RSI计算周期
-    
-    Returns:
-        最新的RSI值，如果计算失败返回None
-    """
-    if prices is None or len(prices) < length + 1:
-        logger.warning(f"Insufficient data for RSI calculation. Need at least {length + 1} data points, got {len(prices) if prices is not None else 0}")
-        return None
-    
-    try:
-        # Calculate price changes
-        delta = prices.diff()
-        
-        # Separate gains and losses
-        gain = delta.where(delta > 0, 0)
-        loss = -delta.where(delta < 0, 0)
-        
-        # Calculate RMA (Running Moving Average) - TradingView's method
-        # RMA is equivalent to EMA with alpha = 1/length
-        alpha = 1.0 / length
-        
-        # Initialize the first values
-        avg_gain = gain.ewm(alpha=alpha, adjust=False).mean()
-        avg_loss = loss.ewm(alpha=alpha, adjust=False).mean()
-        
-        # Calculate RS and RSI
-        rs = avg_gain / avg_loss
-        rsi_series = 100 - (100 / (1 + rs))
-        
-        # 返回最新的RSI值
-        if hasattr(rsi_series, 'iloc') and len(rsi_series) > 0:  # type: ignore
-            latest_rsi = rsi_series.iloc[-1]  # type: ignore
-            return latest_rsi if pd.notna(latest_rsi) else None
-        else:
-            return None
-        
-    except Exception as e:
-        logger.error(f"Error calculating RSI: {e}")
-        return None
 
 def calculate_crypto_rsi(crypto_ids: Dict[str, str]) -> Dict[str, Dict[str, Any]]:
     """
@@ -187,25 +142,27 @@ def calculate_crypto_rsi(crypto_ids: Dict[str, str]) -> Dict[str, Dict[str, Any]
                 continue
             
             # 计算RSI-14和RSI-6
-            rsi_14 = calculate_rsi(prices, length=14)
-            rsi_6 = calculate_rsi(prices, length=6)
-            
-            results[symbol] = {
-                'rsi_14': rsi_14,
-                'rsi_6': rsi_6,
-                'error': False
-            }
-            
-            # 输出结果
-            if rsi_14 is not None:
+            rsi_14_series = calculate_rsi(prices, period=14)
+            rsi_6_series = calculate_rsi(prices, period=6)
+
+            if rsi_14_series is None or rsi_6_series is None:
+                results[symbol] = {
+                    'rsi_14': None,
+                    'rsi_6': None,
+                    'error': True
+                }
+            else:
+                rsi_14 = rsi_14_series.iloc[-1]
+                rsi_6 = rsi_6_series.iloc[-1]
+                results[symbol] = {
+                    'rsi_14': rsi_14,
+                    'rsi_6': rsi_6,
+                    'error': False
+                }
+
+                # 输出结果
                 logger.info(f"RSI-14 for {symbol}: {rsi_14:.2f}")
-            else:
-                logger.warning(f"Failed to calculate RSI-14 for {symbol}")
-                
-            if rsi_6 is not None:
                 logger.info(f"RSI-6 for {symbol}: {rsi_6:.2f}")
-            else:
-                logger.warning(f"Failed to calculate RSI-6 for {symbol}")
                 
         except Exception as e:
             logger.error(f"Error processing {symbol}: {e}")
@@ -221,41 +178,6 @@ def calculate_crypto_rsi(crypto_ids: Dict[str, str]) -> Dict[str, Dict[str, Any]
             time.sleep(Config.API_CALL_DELAY)
     
     return results
-
-def analyze_extreme_rsi(results: Dict[str, Dict[str, Any]]) -> Dict[str, str]:
-    """
-    分析极端RSI值
-    
-    Args:
-        results: RSI计算结果
-    
-    Returns:
-        极端RSI值的字典
-    """
-    extreme_rsi = {}
-    
-    for symbol, data in results.items():
-        if data['error']:
-            continue
-            
-        # 检查RSI-14
-        rsi_14 = data['rsi_14']
-        if isinstance(rsi_14, float):
-            if rsi_14 >= Config.RSI_OVERBOUGHT_14:
-                extreme_rsi[f"{symbol} (RSI-14)"] = f"超买: {rsi_14:.2f}"
-            elif rsi_14 <= Config.RSI_OVERSOLD_14:
-                extreme_rsi[f"{symbol} (RSI-14)"] = f"超卖: {rsi_14:.2f}"
-        
-        # 检查RSI-6
-        rsi_6 = data['rsi_6']
-        if isinstance(rsi_6, float):
-            if rsi_6 >= Config.RSI_OVERBOUGHT_6:
-                extreme_rsi[f"{symbol} (RSI-6)"] = f"超买: {rsi_6:.2f}"
-            elif rsi_6 <= Config.RSI_OVERSOLD_6:
-                extreme_rsi[f"{symbol} (RSI-6)"] = f"超卖: {rsi_6:.2f}"
-    
-    return extreme_rsi
-
 def format_rsi_message(extreme_rsi: Dict[str, str]) -> Tuple[str, str]:
     """
     格式化RSI消息为Markdown格式
