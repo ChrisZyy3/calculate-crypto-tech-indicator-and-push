@@ -128,10 +128,18 @@ def main() -> None:
             if rsi14_series is None or rsi6_series is None:
                 results[symbol] = {"rsi_14": None, "rsi_6": None, "error": True}
             else:
-                rsi14 = rsi14_series.iloc[-1]
-                rsi6 = rsi6_series.iloc[-1]
-                results[symbol] = {"rsi_14": rsi14, "rsi_6": rsi6, "error": False}
-                print(f"{symbol}: RSI-14={rsi14:.2f}, RSI-6={rsi6:.2f}")
+                rsi14 = float(rsi14_series.iloc[-1])
+                rsi6 = float(rsi6_series.iloc[-1])
+                latest_price = float(closes.iloc[-1])
+                results[symbol] = {
+                    "rsi_14": rsi14,
+                    "rsi_6": rsi6,
+                    "price": latest_price,
+                    "error": False,
+                }
+                print(
+                    f"{symbol}: RSI-14={rsi14:.2f}, RSI-6={rsi6:.2f}, price=${latest_price:,.2f}"
+                )
 
         if idx < total:
             time.sleep(Config.API_CALL_DELAY)

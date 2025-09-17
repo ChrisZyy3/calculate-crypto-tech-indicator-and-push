@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from typing import Any, Dict, Optional, Tuple, List
+import numbers
+from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 import pandas as pd
 
@@ -33,45 +34,96 @@ def calculate_rsi(prices: pd.Series, period: int = 14) -> Optional[pd.Series]:
     return rsi
 
 
-def analyze_extreme_rsi(results: Dict[str, Dict[str, Any]]) -> Dict[str, str]:
-    """Find overbought and oversold RSI readings."""
-    extreme: Dict[str, str] = {}
+def analyze_extreme_rsi(results: Dict[str, Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Find overbought and oversold RSI readings.
+
+    Args:
+        results: Mapping of trading symbol to calculated RSI data.
+
+    Returns:
+        A list of dictionaries describing extreme RSI observations. Each
+        dictionary contains the trading symbol, RSI indicator type (``RSI-14``
+        or ``RSI-6``), the detected signal (``"超买"``/``"超卖"``), the RSI value
+        itself and the latest available price.
+    """
+
+    extreme: List[Dict[str, Any]] = []
     for symbol, data in results.items():
         if data.get("error"):
             continue
 
+        price = data.get("price")
+
         r14 = data.get("rsi_14")
-        if isinstance(r14, float):
+        if isinstance(r14, numbers.Real):
             if r14 >= shared.RSI_OVERBOUGHT_14:
-                extreme[f"{symbol} (RSI-14)"] = f"超买: {r14:.2f}"
+                extreme.append(
+                    {
+                        "symbol": symbol,
+                        "indicator": "RSI-14",
+                        "signal": "超买",
+                        "rsi_value": float(r14),
+                        "price": price,
+                    }
+                )
             elif r14 <= shared.RSI_OVERSOLD_14:
-                extreme[f"{symbol} (RSI-14)"] = f"超卖: {r14:.2f}"
+                extreme.append(
+                    {
+                        "symbol": symbol,
+                        "indicator": "RSI-14",
+                        "signal": "超卖",
+                        "rsi_value": float(r14),
+                        "price": price,
+                    }
+                )
 
         r6 = data.get("rsi_6")
-        if isinstance(r6, float):
+        if isinstance(r6, numbers.Real):
             if r6 >= shared.RSI_OVERBOUGHT_6:
-                extreme[f"{symbol} (RSI-6)"] = f"超买: {r6:.2f}"
+                extreme.append(
+                    {
+                        "symbol": symbol,
+                        "indicator": "RSI-6",
+                        "signal": "超买",
+                        "rsi_value": float(r6),
+                        "price": price,
+                    }
+                )
             elif r6 <= shared.RSI_OVERSOLD_6:
-                extreme[f"{symbol} (RSI-6)"] = f"超卖: {r6:.2f}"
+                extreme.append(
+                    {
+                        "symbol": symbol,
+                        "indicator": "RSI-6",
+                        "signal": "超卖",
+                        "rsi_value": float(r6),
+                        "price": price,
+                    }
+                )
 
     return extreme
 
 
-def format_rsi_message(extreme_rsi: Dict[str, str]) -> Tuple[str, str]:
+def _format_price(value: Any) -> str:
+    """Format the latest price for display in Markdown tables."""
+    if isinstance(value, numbers.Real):
+        return f"${float(value):,.2f}"
+    return "--"
+
+
+def format_rsi_message(extreme_rsi: Sequence[Dict[str, Any]]) -> Tuple[str, str]:
     """Format extreme RSI readings into a rich Markdown message."""
     if not extreme_rsi:
         return "", ""
 
-    overbought_items: List[Tuple[str, str]] = []
-    oversold_items: List[Tuple[str, str]] = []
+    overbought_items: List[Dict[str, Any]] = []
+    oversold_items: List[Dict[str, Any]] = []
 
-    for indicator, status in extreme_rsi.items():
-        if "超买" in status:
-            rsi_value = status.split(': ')[1]
-            overbought_items.append((indicator, rsi_value))
-        elif "超卖" in status:
-            rsi_value = status.split(': ')[1]
-            oversold_items.append((indicator, rsi_value))
+    for entry in extreme_rsi:
+        signal = entry.get("signal")
+        if signal == "超买":
+            overbought_items.append(entry)
+        elif signal == "超卖":
+            oversold_items.append(entry)
 
     title = f"RSI-{len(overbought_items)}个超买,{len(oversold_items)}个超卖信号"
 
@@ -88,15 +140,17 @@ def format_rsi_message(extreme_rsi: Dict[str, str]) -> Tuple[str, str]:
         content_lines.extend([
             "### 🔴 **超买区域** `卖出信号`",
             "",
-            "| 加密货币 | RSI指标 | RSI值 |",
-            "|---------|--------|-------|",
+            "| 加密货币 | RSI指标 | RSI值 | 最新价格 |",
+            "|---------|--------|-------|-----------|",
         ])
-        for indicator, rsi_value in overbought_items:
-            parts = indicator.split(' (')
-            crypto_name = parts[0]
-            rsi_type = parts[1].rstrip(')')
+        for item in overbought_items:
+            crypto_name = item.get("symbol", "--")
+            rsi_type = item.get("indicator", "--")
+            rsi_value = item.get("rsi_value")
+            price_text = _format_price(item.get("price"))
+            rsi_display = f"{float(rsi_value):.2f}" if isinstance(rsi_value, numbers.Real) else "--"
             content_lines.append(
-                f"| **{crypto_name}** | `{rsi_type}` | **{rsi_value}** |",
+                f"| **{crypto_name}** | `{rsi_type}` | **{rsi_display}** | {price_text} |",
             )
         content_lines.extend(["", "> 📉 **建议**: 考虑卖出，获利了结", ""])
 
@@ -104,15 +158,17 @@ def format_rsi_message(extreme_rsi: Dict[str, str]) -> Tuple[str, str]:
         content_lines.extend([
             "### 🟢 **超卖区域** `买入信号`",
             "",
-            "| 加密货币 | RSI指标 | RSI值 |",
-            "|---------|--------|-------|",
+            "| 加密货币 | RSI指标 | RSI值 | 最新价格 |",
+            "|---------|--------|-------|-----------|",
         ])
-        for indicator, rsi_value in oversold_items:
-            parts = indicator.split(' (')
-            crypto_name = parts[0]
-            rsi_type = parts[1].rstrip(')')
+        for item in oversold_items:
+            crypto_name = item.get("symbol", "--")
+            rsi_type = item.get("indicator", "--")
+            rsi_value = item.get("rsi_value")
+            price_text = _format_price(item.get("price"))
+            rsi_display = f"{float(rsi_value):.2f}" if isinstance(rsi_value, numbers.Real) else "--"
             content_lines.append(
-                f"| **{crypto_name}** | `{rsi_type}` | **{rsi_value}** |",
+                f"| **{crypto_name}** | `{rsi_type}` | **{rsi_display}** | {price_text} |",
             )
         content_lines.extend(["", "> 📈 **建议**: 考虑买入，可能将反弹", ""])
 

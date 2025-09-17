@@ -151,17 +151,20 @@ def calculate_crypto_rsi(crypto_ids: Dict[str, str]) -> Dict[str, Dict[str, Any]
                     'error': True
                 }
             else:
-                rsi_14 = rsi_14_series.iloc[-1]
-                rsi_6 = rsi_6_series.iloc[-1]
+                rsi_14 = float(rsi_14_series.iloc[-1])
+                rsi_6 = float(rsi_6_series.iloc[-1])
+                latest_price = float(prices.iloc[-1])
                 results[symbol] = {
                     'rsi_14': rsi_14,
                     'rsi_6': rsi_6,
+                    'price': latest_price,
                     'error': False
                 }
 
                 # 输出结果
                 logger.info(f"RSI-14 for {symbol}: {rsi_14:.2f}")
                 logger.info(f"RSI-6 for {symbol}: {rsi_6:.2f}")
+                logger.info(f"Latest price for {symbol}: ${latest_price:,.2f}")
                 
         except Exception as e:
             logger.error(f"Error processing {symbol}: {e}")
