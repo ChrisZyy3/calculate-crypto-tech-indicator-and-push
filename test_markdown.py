@@ -17,12 +17,12 @@ def test_markdown_formatting():
     print("=" * 60)
     
     # 模拟极端RSI数据
-    test_extreme_rsi = {
-        "BTC (RSI-14)": "超买: 72.50",
-        "ETH (RSI-6)": "超卖: 28.30",
-        "SOL (RSI-14)": "超买: 68.20",
-        "APT (RSI-6)": "超卖: 25.80"
-    }
+    test_extreme_rsi = [
+        {"symbol": "BTC", "indicator": "RSI-14", "signal": "超买", "rsi_value": 72.50, "price": 63123.45},
+        {"symbol": "ETH", "indicator": "RSI-6", "signal": "超卖", "rsi_value": 28.30, "price": 3123.11},
+        {"symbol": "SOL", "indicator": "RSI-14", "signal": "超买", "rsi_value": 68.20, "price": 154.92},
+        {"symbol": "APT", "indicator": "RSI-6", "signal": "超卖", "rsi_value": 25.80, "price": 9.82},
+    ]
     
     # 格式化消息
     title, content = format_rsi_message(test_extreme_rsi)
