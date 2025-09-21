@@ -1,0 +1,48 @@
+name: Run RSI scripts on schedule
+
+on:
+  schedule:
+    - cron: '1 0 * * *'
+    - cron: '1 */4 * * *'
+  workflow_dispatch: {}
+
+jobs:
+  run-rsi1d:
+    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'schedule' && github.event.schedule == '1 0 * * *')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run daily RSI script
+        run: python rsi1d.py
+
+  run-rsi4h:
+    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'schedule' && github.event.schedule == '1 */4 * * *')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run 4-hour RSI script
+        run: python rsi4h.py
