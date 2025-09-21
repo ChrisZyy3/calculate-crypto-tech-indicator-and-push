@@ -146,7 +146,7 @@ def main() -> None:
 
     extreme = analyze_extreme_rsi(results)
     if extreme:
-        title, content = format_rsi_message(extreme)
+        title, content = format_rsi_message(extreme, timeframe_tag="rsi4h")
         send_notification(title, content)
 
 

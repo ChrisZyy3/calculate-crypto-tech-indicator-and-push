@@ -110,8 +110,16 @@ def _format_price(value: Any) -> str:
     return "--"
 
 
-def format_rsi_message(extreme_rsi: Sequence[Dict[str, Any]]) -> Tuple[str, str]:
-    """Format extreme RSI readings into a rich Markdown message."""
+def format_rsi_message(
+    extreme_rsi: Sequence[Dict[str, Any]], timeframe_tag: Optional[str] = None
+) -> Tuple[str, str]:
+    """Format extreme RSI readings into a rich Markdown message.
+
+    Args:
+        extreme_rsi: Extreme RSI readings collected from calculations.
+        timeframe_tag: Optional label describing the timeframe (e.g. ``"rsi1d"``
+            or ``"rsi4h"``) to be prefixed to the notification title.
+    """
     if not extreme_rsi:
         return "", ""
 
@@ -125,7 +133,8 @@ def format_rsi_message(extreme_rsi: Sequence[Dict[str, Any]]) -> Tuple[str, str]
         elif signal == "超卖":
             oversold_items.append(entry)
 
-    title = f"RSI-{len(overbought_items)}个超买,{len(oversold_items)}个超卖信号"
+    base_title = f"RSI-{len(overbought_items)}个超买,{len(oversold_items)}个超卖信号"
+    title = f"{timeframe_tag} | {base_title}" if timeframe_tag else base_title
 
     content_lines: List[str] = [
         "## 📈 RSI技术指标分析",
