@@ -298,7 +298,7 @@ def main():
         # 处理通知
         if extreme_rsi:
             # 使用新的Markdown格式化函数
-            title, content = format_rsi_message(extreme_rsi)
+            title, content = format_rsi_message(extreme_rsi, timeframe_tag="rsi1d")
             
             # 打印最终需要发送的消息
             print("\n" + "=" * 50)
